@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta name="robots" content="noindex" />
+    <meta charset="utf-8">
+    <title>test2_3</title>
+
+    <style>
+        #map {
+            height: 100%;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+
+</head>
+
+<body>
+    <script type="text/javascript">
+        _uacct = "UA-162157-1";
+    </script>
+
+    <header>
+        <div class="hamburger-menu">
+            <input type="checkbox" id="menu-btn-check">
+            <link rel="stylesheet" href="menyu.css">
+            <label for="menu-btn-check" class="menu-btn"><span></span></label>
+
+            <div class="menu-content">
+                <h2>地図表示設定</h2>
+                <h4>探したい条件を選択してください</h4>
+                <input type="checkbox" name="joueken" id="#00ffff" value="school">学校<br>
+                <input type="checkbox" name="joueken" id="#7fffd4" value="park">公園<br>
+                <input type="checkbox" name="joueken" id="#e6e6fa" value="hospital">病院<br>
+                <input type="checkbox" name="joueken" id="#ffa500" value="conveni">コンビニ<br>
+                <input type="checkbox" name="joueken" id="#fff8dc" value="drugstore">薬局<br>
+
+
+
+                <input type='text' id="txtMapSearch" value="" placeholder="地名,住所" onchange="myfunc(this.value)" />
+                <input type='submit' id="kensaku" value="検索" /><br>
+
+                <button type="button" id="clear" value="clear">リセット</button>
+                <button type="button" id="restart" value="restart">再検索</button>
+            </div>
+
+        </div>
+    </header>
+
+    <p id="msg"></p>
+
+    <dialog id="cDialog">
+
+        <form method="dialog">
+
+            <input type="radio" name="conditions" id="near">近く<br>
+            <input type="radio" name="conditions" id="far">遠く<br>
+            <input type="radio" name="conditions" id="gdistance">近すぎず遠すぎず
+
+            <menu>
+                <button name="return" id="back" value="cancel">戻る</button>
+                <button id="confirmBtn" value="default">決定</button>
+            </menu>
+        </form>
+    </dialog>
+
+    <script>
+        let c = 0;
+        let k = 0;
+        let re = 0;
+
+        var map;
+        var geo;
+        var marker = null;
+        var circleColor;
+        var infoWindow;
+        var circles = [];
+        let color = [];
+        let check = [];
+        let donut = [];
+        var bounds = null;
+        let near = [];
+        let far = [];
+        let gdistance = [];
+
+        var radioNear = document.getElementById('near');
+        var radioFar = document.getElementById('far');
+        var radioGdistance = document.getElementById('gdistance');
+
+        var cDialog = document.getElementById('cDialog');
+        var kensaku = document.getElementById('kensaku');
+        var back = document.getElementById('back');
+        var confirmBtn = document.getElementById('confirmBtn');
+        var clear = document.getElementById('clear');
+        var restart = document.getElementById('restart');
+
+        const checkboxMulti = document.getElementsByName('joueken');
+
+        var oTxtAddr = document.getElementById('txtMapSearch');
+        var sAddress = oTxtAddr.value;
+
+        //検索ボタンを押せない状態に
+        kensaku.disabled = true;
+
+        //テキストボックス内のnullや空白の判定
+        function myfunc(value) {
+            sAddress = oTxtAddr.value;
+            console.log(sAddress);
+            if (sAddress == null || sAddress == "" || sAddress.match(/^[  \r\n\t]*$/)) {
+                kensaku.disabled = true;
+            } else {
+                kensaku.disabled = false;
+            }
+        }
+
+        confirmBtn.addEventListener('click', test);         //決定ボタン
+        back.addEventListener('click', test2);              //戻るボタン
+        clear.addEventListener('click', reset);             //リセットボタン
+        kensaku.addEventListener('click', search);          //検索ボタン
+        restart.addEventListener('click', research);        //再検索ボタン
+
+        // 位置情報を取得する
+        function getLocation() {
+            navigator.geolocation.getCurrentPosition(
+                function getLocation2(position) {
+                    // 現在地の緯度経度所得
+                    var latitude = position.coords.latitude;
+                    var longitude = position.coords.longitude;
+                    latlng = new google.maps.LatLng(latitude, longitude);
+                    // 現在地の緯度経度を中心にマップを生成
+                    map = new google.maps.Map(document.getElementById('map'), {
+                        center: latlng,
+                        zoom: 15
+                    });
+                });
+            geo = new google.maps.Geocoder();   //キーワード検索用
+            bounds = new google.maps.LatLngBounds();
+        }
+
+        //チェックボックスの状態確認
+        for (let i = 0; i < checkboxMulti.length; i++) {
+            checkboxMulti[i].addEventListener('change', function () {
+                if (this.checked) {
+                    console.log('チェックした場合');
+                    checkvalue = this.value;
+                    checkcolor = this.id;
+                    check.push(this.value);     //配列に「joueken」の「value」を入れる
+                    color.push(this.id);       //対応するカラーコードの入れる
+                    console.log("check:", check);
+                    console.log("color:", color);
+
+
+                    switch (checkvalue) {
+                        case 'school':
+                            console.log('学校');
+                            cDialog.showModal();
+                            circleColor = '#00ffff';    //シアン(円の中の色)
+                            break;
+                        case 'park':
+                            console.log('公園');
+                            cDialog.showModal();
+                            circleColor = '#7fffd4';    //アクアマリン(円の中の色)
+                            break;
+                        case 'hospital':
+                            console.log('病院');
+                            cDialog.showModal();
+                            circleColor = '#e6e6fa';    //ラベンダー(円の中の色)
+                            break;
+                        case 'conveni':
+                            console.log('コンビニ');
+                            cDialog.showModal();
+                            circleColor = '#ffa500';    //オレンジ(円の中の色)
+                            break;
+                        case 'drugstore':
+                            console.log('薬局');
+                            cDialog.showModal();
+                            circleColor = '#fff8dc';    //コーンシルク(円の中の色)
+                            break;
+                        default:
+                    }
+                } else {
+                    console.log('チェック外した場合');
+                    checkvalue = this.value;
+                    checkcolor = this.id;
+                    console.log("削除", checkvalue);
+                    console.log("削除", checkcolor);
+                    clearCircle(map);
+                }
+            });
+        }
+
+
+        //.showModal();内の操作判定
+        function test(event) {
+            let inputradio = document.querySelector("input[name=conditions]:checked");
+            latlng = map.getCenter();
+
+            if (inputradio === radioNear) {
+                console.log('近く');
+                radioNear.checked = false;
+                near.push(checkvalue);
+                console.log("near:", near);
+                //現在地から2キロ以内の○○を検索
+                infoWindow = new google.maps.InfoWindow();
+                var service = new google.maps.places.PlacesService(map);
+                service.nearbySearch({
+                    location: latlng,
+                    radius: 2000,//2km 
+                    type: [checkvalue]
+                }, callback);
+            } else if (inputradio === radioFar) {
+                console.log('遠く');
+                radioFar.checked = false;
+                far.push(checkvalue);
+                console.log("far:", far);
+                //現在地から2キロ以内の○○を検索
+                infoWindow = new google.maps.InfoWindow();
+                var service = new google.maps.places.PlacesService(map);
+                service.nearbySearch({
+                    location: latlng,
+                    radius: 2000,//2km 
+                    type: [checkvalue]
+                }, callback2);
+            } else if (inputradio === radioGdistance) {
+                console.log('近すぎず～');
+                radioGdistance.checked = false;
+                gdistance.push(checkvalue);
+                console.log("gdistance:", gdistance);
+                //現在地から2キロ以内の○○を検索
+                infoWindow = new google.maps.InfoWindow();
+                var service = new google.maps.places.PlacesService(map);
+                service.nearbySearch({
+                    location: latlng,
+                    radius: 2000,//2km 
+                    type: [checkvalue]
+                }, callback3);
+            }
+        }
+
+        //showModalで「戻る」選択時処理
+        function test2(event) {
+            let targets = document.querySelectorAll(`input[type='checkbox'][name='joueken']`);
+
+            for (let t2 = 0; t2 < checkboxMulti.length; t2++) {
+                if (checkcolor === targets[t2].id) {
+                    targets[t2].checked = false;
+                }
+            }
+            check.pop(this.value);
+            color.pop(this.id);
+            console.log("check:", check);
+            console.log("color:", color);
+        }
+
+        function callback(results, status) {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                for (var i = 0; i < 10; i++) {
+                    createMarker(results[i]);
+                }
+            }
+        }
+        function callback2(results, status) {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                for (var i = 0; i < 2; i++) {
+                    createMarker2(results[i]);
+                }
+            }
+        }
+        function callback3(results, status) {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                for (var i = 0; i < 4; i++) {
+                    createMarker3(results[i]);
+                }
+            }
+        }
+
+        //地図上に円を生成(近い)
+        function createMarker(place) {
+            circles.push(new google.maps.Circle({
+                map: map,
+                fillColor: circleColor,   // 塗りつぶし色
+                strokeColor: '#00ff00', // 外周色
+                center: place.geometry.location,
+                position: checkvalue,
+                radius: 120
+            }));
+            console.log("近い円生成");
+        }
+        //地図上に円を生成(遠い)
+        function createMarker2(place) {
+            circles.push(new google.maps.Circle({
+                map: map,
+                fillColor: circleColor,
+                strokeColor: '#ff0000',
+                center: place.geometry.location,
+                position: checkvalue,
+                radius: 500
+            }));
+            console.log("遠い円生成");
+        }
+        //地図上に円を生成(中間)
+        function createMarker3(place) {
+            donut.push(new google.maps.Polygon({
+                map: map,
+                paths: [drawCircle(place.geometry.location, 0.5, 1), //1マイル=1.6km or 1km
+                drawCircle(place.geometry.location, 0.3, -1)],
+                strokeColor: "#0000FF",
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: circleColor,
+                fillOpacity: 0.35,
+                position: checkvalue
+            }));
+            console.log("中間円生成");
+
+        }
+
+        //------------------------------------------------------------------
+
+        //再検索時
+        function research() {
+            dragCircleAll(map);//一度円をすべて消す
+            latlng = map.getCenter();
+
+            for (re = 0; re < check.length; re++) {
+                console.log(check[re]);
+
+                for (var item of near) {
+                    if (check[re] === item) {
+                        infoWindow = new google.maps.InfoWindow();
+                        var service = new google.maps.places.PlacesService(map);
+                        service.nearbySearch({
+                            location: latlng,
+                            radius: 2000,//2km 
+                            type: item
+                        }, recallback);
+                    }
+                }
+                for (var item of far) {
+                    if (check[re] === item) {
+                        infoWindow = new google.maps.InfoWindow();
+                        var service = new google.maps.places.PlacesService(map);
+                        service.nearbySearch({
+                            location: latlng,
+                            radius: 2000,//2km 
+                            type: item
+                        }, recallback2);
+                    }
+                }
+                for (var item of gdistance) {
+                    if (check[re] === item) {
+                        infoWindow = new google.maps.InfoWindow();
+                        var service = new google.maps.places.PlacesService(map);
+                        service.nearbySearch({
+                            location: latlng,
+                            radius: 2000,//2km 
+                            type: item
+                        }, recallback3);
+                    }
+                }
+            }
+        }
+
+        function recallback(results, status) {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                for (var i = 0; i < 10; i++) {
+                    recreateMarker(results[i]);
+                }
+            }
+        }
+        function recallback2(results, status) {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                for (var i = 0; i < 2; i++) {
+                    recreateMarker2(results[i]);
+                }
+            }
+        }
+        function recallback3(results, status) {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                for (var i = 0; i < 4; i++) {
+                    recreateMarker3(results[i]);
+                }
+            }
+        }
+
+        //地図上に円を生成(近い)
+        function recreateMarker(place) {
+            for (k; k < near.length; k++) {
+                for (re = 0; re < color.length; re++) {
+                    if (check[re] === near[k]) {
+                        circleColor = color[re];
+                        console.log(circleColor);
+                        recircle();
+                    }
+                }
+            }
+            function recircle() {
+                circles.push(new google.maps.Circle({
+                    map: map,
+                    fillColor: circleColor,   // 塗りつぶし色
+                    strokeColor: '#00ff00', // 外周色
+                    center: place.geometry.location,
+                    position: near[k],
+                    radius: 120
+                }));
+
+                console.log("reNear");
+                console.log("re近い円生成");
+            }
+
+
+        }
+        //地図上に円を生成(遠い)
+        function recreateMarker2(place) {
+            for (k = 0; k < far.length; k++) {
+                circleColor = color[k];
+            }
+            circles.push(new google.maps.Circle({
+                map: map,
+                fillColor: circleColor,
+                strokeColor: '#ff0000',
+                center: place.geometry.location,
+                position: far[k],
+                radius: 500
+            }));
+            console.log("reFar");
+            console.log("re遠い円生成");
+
+        }
+        //地図上に円を生成(中間)
+        function recreateMarker3(place) {
+            //for (k = 0; k < gdistance.length; k++) {
+            donut.push(new google.maps.Polygon({
+                map: map,
+                paths: [drawCircle(place.geometry.location, 0.5, 1), //1マイル=1.6km or 1km
+                drawCircle(place.geometry.location, 0.3, -1)],
+                strokeColor: "#0000FF",
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: color[k],
+                fillOpacity: 0.35,
+                position: gdistance[k]
+            }));
+            console.log("reGdistance");
+            console.log("re中間円生成");
+        }
+
+        //------------------------------------------------------------------
+
+        //ドーナツ円生成
+        function drawCircle(point, radius, dir) {
+            var d2r = Math.PI / 180;   // 角度から半径 
+            var r2d = 180 / Math.PI;   // 半径から角度 
+            var earthsradius = 3963; // 3963 は地球の半径 (マイル)
+
+            var points = 32;
+
+            // 緯度/経度で半径を見つける
+            var rlat = (radius / earthsradius) * r2d;   //緯度
+            var rlng = rlat / Math.cos(point.lat() * d2r);  //経度
+
+
+            var extp = new Array();
+            if (dir == 1) { var start = 0; var end = points + 1 } // one extra here makes sure we connect the
+            else { var start = points + 1; var end = 0 }
+            for (var i = start; (dir == 1 ? i < end : i > end); i = i + dir) {
+                var theta = Math.PI * (i / (points / 2));
+                ey = point.lng() + (rlng * Math.cos(theta)); // 中心 a + 半径 x * cos(シータ)
+                ex = point.lat() + (rlat * Math.sin(theta)); // 中心 b + 半径 y * sin(シータ)
+                extp.push(new google.maps.LatLng(ex, ey));
+                bounds.extend(extp[extp.length - 1]);
+            }
+            return extp;
+        }
+
+
+        //円を消す(チェックを外した場合)
+        function clearCircle(map) {
+            //単体円
+            for (var i = 0; i < circles.length; i++) {
+                if (circles[i].position === checkvalue) {
+                    circles[i].setMap(null);
+                }
+            }
+
+            //二重円
+            for (var d = 0; d < donut.length; d++) {
+                if (donut[d].position === checkvalue) {
+                    donut[d].setMap(null);
+                }
+            }
+
+            //施設削除
+            for (var j = 0; j < check.length; j++) {
+                if (check[j] === checkvalue) {
+                    var index = check.indexOf(checkvalue);  //検索文字列
+                    check.splice(j, 1);
+                    console.log('check削除後残り : ', check);
+                }
+            }
+
+            //施設カラー削除
+            for (var j = 0; j < color.length; j++) {
+                if (color[j] === checkcolor) {
+                    var index = color.indexOf(checkcolor);  //検索文字列
+                    color.splice(j, 1);
+                    console.log('color削除後残り : ', color);
+                }
+            }
+
+            //近いから施設削除
+            for (var j = 0; j < near.length; j++) {
+                if (near[j] === checkvalue) {
+                    var index = near.indexOf(checkvalue);  //検索文字列
+                    near.splice(j, 1)                  //配列の先頭を削除
+                    console.log('near削除後残り : ', near);
+                }
+            }
+
+            //遠いから施設削除
+            for (var j = 0; j < far.length; j++) {
+                if (far[j] === checkvalue) {
+                    var index = far.indexOf(checkvalue);  //検索文字列
+                    far.splice(j, 1)                  //配列の先頭を削除
+                    console.log('far削除後残り : ', far);
+                }
+            }
+
+            //中間から施設削除
+            for (var j = 0; j < gdistance.length; j++) {
+                if (gdistance[j] === checkvalue) {
+                    var index = gdistance.indexOf(checkvalue);  //検索文字列
+                    gdistance.splice(j, 1)                  //配列の先頭を削除
+                    console.log('gdistance削除後残り : ', gdistance);
+                }
+            }
+        }
+
+        //円を全て消す(ボタン)
+        function reset(map) {
+            for (var i = 0; i < circles.length; i++) {
+                circles[i].setMap(null);
+            }
+
+            //二重円
+            for (var d = 0; d < donut.length; d++) {
+                donut[d].setMap(null);
+            }
+
+            //チェック外し
+            let targets = document.querySelectorAll(`input[type='checkbox'][name='joueken']`);
+            for (const i of targets) {
+                i.checked = false;
+            }
+            check.length = 0;
+            circles.length = 0;
+            donut.length = 0;
+            color.length = 0;
+            near.length = 0;
+            far.length = 0;
+            gdistance.length = 0;
+        }
+
+        //再検索時円削除
+        function dragCircleAll(map) {
+            for (var i = 0; i < circles.length; i++) {
+                circles[i].setMap(null);
+            }
+
+            //二重円
+            for (var d = 0; d < donut.length; d++) {
+                donut[d].setMap(null);
+            }
+            circles.length = 0;
+            donut.length = 0;
+        }
+
+        //キーワード検索後マーカー表示
+        function setMarker(latLng, address) {
+            if (marker != null) {
+                marker.setMap(null);
+            }
+            marker = new google.maps.Marker({
+                position: latLng,
+                map: map,
+                title: address
+            });
+        }
+        //キーワード検索
+        function search() {
+            var oTxtAddr = document.getElementById('txtMapSearch');
+            var sAddress = oTxtAddr.value;
+
+            console.log(sAddress);
+
+            if (!(sAddress == "")) {
+                geo.geocode({ 'address': sAddress }, function (results, status) {
+                    if (status == google.maps.GeocoderStatus.OK) {
+                        map.setCenter(results[0].geometry.location);
+                        setMarker(results[0].geometry.location, sAddress);
+                    } else {
+                        alert("該当する場所が見つかりませんでした");
+                    }
+                });
+            }
+        }
+    </script>
+
+    <div id="map"></div>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCc5OhqMRKN0mbfkLd1TjTrhv5I5WNc5Z4
+            &language=ja&libraries=drawing,geometry,places,visualization&callback=getLocation" async defer></script>
+
+</body>
+
+</html>
